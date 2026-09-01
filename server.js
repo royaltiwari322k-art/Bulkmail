@@ -5,10 +5,13 @@ const XLSX       = require('xlsx');
 const path       = require('path');
 
 require('dotenv').config();
+const crypto = require('crypto');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
 const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
+const APP_PASSWORD = process.env.APP_PASSWORD || '7817808959';
+const sessions = new Set();
 
 const SMTP = {
   host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
@@ -20,7 +23,37 @@ const SMTP = {
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// File upload (memory only, no disk)
+function cookieToken(req) {
+  const raw = req.headers.cookie || '';
+  const part = raw.split(';').map(s => s.trim()).find(s => s.startsWith('gate='));
+  return part ? part.slice(5) : '';
+}
+
+function requireAuth(req, res, next) {
+  const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
+    || cookieToken(req)
+    || String(req.query.token || '');
+  if (!sessions.has(token)) return res.status(401).json({ error: 'Pehle password daalo' });
+  next();
+}
+
+app.post('/api/login', (req, res) => {
+  if (String(req.body?.password || '') !== APP_PASSWORD)
+    return res.status(401).json({ error: 'Galat password' });
+  const token = crypto.randomBytes(24).toString('hex');
+  sessions.add(token);
+  res.setHeader('Set-Cookie', `gate=${token}; HttpOnly; SameSite=Lax; Path=/`);
+  res.json({ ok: true, token });
+});
+
+app.get('/api/session', requireAuth, (req, res) => res.json({ ok: true }));
+
+app.post('/api/logout', (req, res) => {
+  sessions.delete(cookieToken(req));
+  res.setHeader('Set-Cookie', 'gate=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
+  res.json({ ok: true });
+});
+
 const upload = multer({ storage: multer.memoryStorage() });
 
 // ── Campaign state ─────────────────────────────────────────────────────────────
@@ -113,7 +146,7 @@ function push(event, data) {
 }
 
 // ── API: Upload Excel/CSV → return email list ──────────────────────────────────
-app.post('/api/upload', upload.single('file'), (req, res) => {
+app.post('/api/upload', requireAuth, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Koi file nahi mili' });
 
   let wb;
@@ -144,7 +177,7 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 });
 
 // ── API: Start campaign ────────────────────────────────────────────────────────
-app.post('/api/start', async (req, res) => {
+app.post('/api/start', requireAuth, async (req, res) => {
   if (state.running) return res.status(409).json({ error: 'Campaign pehle se chal rahi hai' });
 
   const { subject, body, emails, delay, from, fromName } = req.body;
@@ -225,13 +258,13 @@ app.post('/api/start', async (req, res) => {
 });
 
 // ── API: Stop campaign ─────────────────────────────────────────────────────────
-app.post('/api/stop', (req, res) => {
+app.post('/api/stop', requireAuth, (req, res) => {
   state.stop = true;
   res.json({ ok: true });
 });
 
 // ── API: Live progress (SSE) ───────────────────────────────────────────────────
-app.get('/api/progress', (req, res) => {
+app.get('/api/progress', requireAuth, (req, res) => {
   res.setHeader('Content-Type',  'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection',    'keep-alive');

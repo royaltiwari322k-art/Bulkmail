@@ -1,424 +1,437 @@
 <!DOCTYPE html>
-<html lang="hi">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bulk Email Sender</title>
+  <title>Mygrow Software — Bulk Mail</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet" />
   <style>
+    :root {
+      --bg: #0b1220;
+      --bg2: #111827;
+      --card: #151d2e;
+      --line: #243044;
+      --text: #e8eef8;
+      --muted: #8b9bb4;
+      --accent: #5b8def;
+      --accent2: #3d6fd8;
+      --ok: #34d399;
+      --bad: #f87171;
+      --radius: 16px;
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
     body {
-      font-family: 'Segoe UI', sans-serif;
-      background: #f0f2f5;
-      color: #1a1a2e;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
       min-height: 100vh;
-      padding: 30px 16px;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(900px 400px at 10% -10%, rgba(91,141,239,.18), transparent 50%),
+        radial-gradient(700px 360px at 100% 0%, rgba(99,102,241,.12), transparent 45%);
+      pointer-events: none;
     }
 
-    h1 {
-      text-align: center;
-      font-size: 26px;
-      margin-bottom: 28px;
-      color: #1a1a2e;
+    /* Lock */
+    #lockScreen {
+      position: relative; z-index: 2;
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
     }
+    .lock-card {
+      width: 100%; max-width: 420px;
+      background: linear-gradient(180deg, #1a2438, #121a2b);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 40px 36px 32px;
+      box-shadow: 0 24px 80px rgba(0,0,0,.45);
+    }
+    .brand-mark {
+      width: 48px; height: 48px; border-radius: 12px;
+      background: linear-gradient(135deg, #5b8def, #6366f1);
+      display: grid; place-items: center;
+      font-weight: 700; font-size: 18px; color: #fff;
+      margin-bottom: 20px;
+    }
+    .lock-card h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+    .lock-card p { color: var(--muted); font-size: 14px; margin-bottom: 28px; line-height: 1.5; }
+    #lockErr { color: var(--bad); font-size: 13px; margin: 10px 0 0; display: none; }
 
-    .container {
-      max-width: 680px;
-      margin: 0 auto;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
+    /* App */
+    #app { display: none; position: relative; z-index: 1; }
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 28px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(11,18,32,.75);
+      backdrop-filter: blur(12px);
+      position: sticky; top: 0; z-index: 5;
     }
+    .topbar-brand { display: flex; align-items: center; gap: 12px; }
+    .topbar-brand strong { display: block; font-size: 15px; }
+    .topbar-brand span { font-size: 12px; color: var(--muted); }
+    .ghost {
+      background: transparent; border: 1px solid var(--line); color: var(--muted);
+      padding: 8px 14px; border-radius: 8px; cursor: pointer; font: inherit; font-size: 13px;
+    }
+    .ghost:hover { color: var(--text); border-color: #3a4a66; }
+
+    .wrap {
+      max-width: 1120px; margin: 0 auto; padding: 28px 20px 48px;
+      display: grid; grid-template-columns: 1.15fr .85fr; gap: 20px;
+    }
+    @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
 
     .card {
-      background: #fff;
-      border-radius: 12px;
-      padding: 24px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 22px 24px;
     }
-
     .card h2 {
-      font-size: 14px;
-      font-weight: 600;
-      color: #555;
-      text-transform: uppercase;
-      letter-spacing: .6px;
-      margin-bottom: 16px;
+      font-size: 13px; font-weight: 600; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 16px;
     }
+    .stack { display: flex; flex-direction: column; gap: 20px; }
 
-    label {
-      display: block;
-      font-size: 13px;
-      color: #555;
-      margin-bottom: 5px;
-      margin-top: 12px;
-    }
+    label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 6px; }
     label:first-of-type { margin-top: 0; }
-
-    input, textarea, select {
-      width: 100%;
-      padding: 9px 12px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      font-size: 14px;
-      font-family: inherit;
-      background: #fafafa;
-      outline: none;
-      transition: border .2s;
+    input, textarea {
+      width: 100%; padding: 11px 13px;
+      border: 1px solid var(--line); border-radius: 10px;
+      background: var(--bg2); color: var(--text);
+      font: inherit; font-size: 14px; outline: none;
     }
-    input:focus, textarea:focus { border-color: #6366f1; background: #fff; }
-    textarea { resize: vertical; }
-
+    input:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(91,141,239,.18); }
+    textarea { resize: vertical; min-height: 88px; }
     .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
 
     .note {
-      background: #fffbeb;
-      border: 1px solid #fde68a;
-      border-radius: 8px;
-      padding: 10px 14px;
-      font-size: 12.5px;
-      color: #92400e;
-      margin-bottom: 16px;
+      background: rgba(91,141,239,.08);
+      border: 1px solid rgba(91,141,239,.22);
+      color: #b8c9ea;
+      border-radius: 10px; padding: 11px 14px; font-size: 12.5px; line-height: 1.5;
+      margin-bottom: 4px;
     }
-
-    .upload-row {
-      display: flex; gap: 10px; align-items: center;
-    }
-    .upload-row input[type=file] {
-      flex: 1;
-      padding: 7px 10px;
-    }
-    #uploadMsg {
-      font-size: 12px;
-      color: #16a34a;
-      margin-top: 6px;
-      display: none;
-    }
-    #uploadMsg.err { color: #dc2626; }
+    .upload-row { display: flex; gap: 10px; align-items: center; }
+    .upload-row input[type=file] { flex: 1; padding: 8px 10px; }
+    #uploadMsg { font-size: 12px; color: var(--ok); margin-top: 8px; display: none; }
+    #uploadMsg.err { color: var(--bad); }
 
     .btn {
-      width: 100%;
-      padding: 12px;
-      border: none;
-      border-radius: 8px;
-      font-size: 15px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity .2s, transform .1s;
+      width: 100%; padding: 13px; border: none; border-radius: 10px;
+      font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
     }
-    .btn:active { transform: scale(.98); }
-    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn:active { transform: scale(.99); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-primary { background: linear-gradient(180deg, var(--accent), var(--accent2)); color: #fff; margin-top: 18px; }
+    .btn-primary:hover { filter: brightness(1.06); }
+    .btn-sm { width: auto; padding: 9px 16px; font-size: 13px; margin-top: 0;
+      background: var(--accent); color: #fff; }
+    #stopBtn { background: #dc2626; color: #fff; display: none; margin-top: 10px; }
+    .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
 
-    #startBtn { background: #6366f1; color: #fff; }
-    #startBtn:not(:disabled):hover { background: #4f46e5; }
-    #stopBtn  { background: #ef4444; color: #fff; display: none; margin-top: 10px; }
-    #stopBtn:hover { background: #dc2626; }
-
-    /* Progress */
     #progressCard { display: none; }
-
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      margin-bottom: 18px;
-      text-align: center;
-    }
-    .stat-box {
-      background: #f8f8ff;
-      border: 1px solid #e0e0ff;
-      border-radius: 8px;
-      padding: 14px 8px;
-    }
-    .stat-num {
-      font-size: 28px;
-      font-weight: 700;
-      font-variant-numeric: tabular-nums;
-    }
-    .stat-num.green  { color: #16a34a; }
-    .stat-num.red    { color: #dc2626; }
-    .stat-num.indigo { color: #6366f1; }
-    .stat-lbl { font-size: 11px; color: #888; margin-top: 2px; }
-
-    .bar-wrap {
-      background: #e5e7eb;
-      border-radius: 99px;
-      height: 10px;
-      overflow: hidden;
-      margin-bottom: 6px;
-    }
-    .bar-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #6366f1, #a855f7);
-      border-radius: 99px;
-      transition: width .4s ease;
-      width: 0%;
-    }
-    .bar-meta {
-      display: flex;
-      justify-content: space-between;
-      font-size: 12px;
-      color: #888;
-      margin-bottom: 18px;
-    }
-
-    /* Log */
-    #logBox {
-      max-height: 260px;
-      overflow-y: auto;
-      border: 1px solid #ececec;
-      border-radius: 8px;
-      padding: 6px 0;
-      font-size: 13px;
-    }
-    .log-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 12px;
-      border-bottom: 1px solid #f3f3f3;
-    }
-    .log-row:last-child { border-bottom: none; }
-    .log-dot {
-      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
-    }
-    .log-dot.sent   { background: #16a34a; }
-    .log-dot.failed { background: #dc2626; }
-    .log-email { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #333; }
-    .log-tag {
-      font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px;
-    }
-    .log-tag.sent   { background: #dcfce7; color: #16a34a; }
-    .log-tag.failed { background: #fee2e2; color: #dc2626; }
-    .log-time { font-size: 11px; color: #bbb; }
-    .log-empty { text-align: center; color: #bbb; padding: 20px; font-size: 13px; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; text-align: center; }
+    .stat-box { background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; padding: 14px 8px; }
+    .stat-num { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .stat-num.green { color: var(--ok); }
+    .stat-num.red { color: var(--bad); }
+    .stat-num.indigo { color: var(--accent); }
+    .stat-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .bar-wrap { background: #1e293b; border-radius: 99px; height: 8px; overflow: hidden; margin-bottom: 6px; }
+    .bar-fill { height: 100%; width: 0; background: linear-gradient(90deg, #5b8def, #818cf8); border-radius: 99px; transition: width .4s; }
+    .bar-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+    #logBox { max-height: 280px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
+    .log-row { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 13px; }
+    .log-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .log-dot.sent { background: var(--ok); }
+    .log-dot.failed { background: var(--bad); }
+    .log-email { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .log-tag { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
+    .log-tag.sent { background: rgba(52,211,153,.15); color: var(--ok); }
+    .log-tag.failed { background: rgba(248,113,113,.15); color: var(--bad); }
+    .log-time { font-size: 11px; color: #64748b; }
+    .log-empty { text-align: center; color: #64748b; padding: 22px; font-size: 13px; }
   </style>
 </head>
 <body>
 
-<h1>📧 Bulk Email Sender</h1>
-
-<div class="container">
-
-  <!-- SMTP -->
-  <div class="card">
-    <h2>📡 SMTP Settings</h2>
-    <div class="note">
-      ✅ Brevo SMTP server pe set hai.<br>
-      Gmail/Yahoo se bhejne par inbox mein <strong>@brevosend.com</strong> dikhega — ye code ki galti nahi, Brevo Gmail ke rules ki wajah se From badal deta hai.
-      Apna domain (jaise atalenthub.com) authenticate karoge tabhi asli email dikhegi.
-    </div>
+<div id="lockScreen">
+  <div class="lock-card">
+    <div class="brand-mark">M</div>
+    <h1>Mygrow Software</h1>
+    <p>Bulk Mail desk. Continue with the access password to open the console.</p>
+    <label for="gatePass">Access password</label>
+    <input id="gatePass" type="password" autocomplete="current-password" placeholder="Enter password" onkeydown="if(event.key==='Enter')unlock()" />
+    <div id="lockErr">Incorrect password</div>
+    <button class="btn btn-primary" onclick="unlock()">Unlock console</button>
   </div>
+</div>
 
-  <!-- Compose -->
-  <div class="card">
-    <h2>✏️ Email Compose</h2>
-    <label>From name (inbox mein ye naam dikhega)</label>
-    <input id="fromName" type="text" value="Mygrow Software" />
-    <label>From email (Brevo mein verified Gmail)</label>
-    <input id="from" type="email" value="www.priyasingh200227@gmail.com" />
-    <label>Subject</label>
-    <input id="subject" type="text" placeholder="Aapka khaas offer andar hai 🎁" />
-    <label>Body (normal text — enter se nayi line, khaali line se naya paragraph)</label>
-    <textarea id="body" rows="10" placeholder="Hi,&#10;&#10;Thank you for your interest in Mygrow Software.&#10;&#10;We would like to share a short update with you.&#10;&#10;Please let us know if you have any questions."></textarea>
-  </div>
-
-  <!-- Recipients -->
-  <div class="card">
-    <h2>👥 Recipients</h2>
-    <label>Excel / CSV Upload karo</label>
-    <div class="upload-row">
-      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" />
-      <button class="btn" style="width:auto;padding:9px 16px;font-size:13px;background:#6366f1;color:#fff" onclick="uploadFile()">Upload</button>
-    </div>
-    <div id="uploadMsg"></div>
-
-    <label style="margin-top:16px">Ya manually paste karo (ek per line)</label>
-    <textarea id="emailList" rows="5" placeholder="alice@example.com&#10;bob@example.com&#10;charlie@example.com"></textarea>
-  </div>
-
-  <!-- Delay + Buttons -->
-  <div class="card">
-    <h2>⏱ Delay</h2>
-    <label>Emails ke beech gap (seconds)</label>
-    <input id="delay" type="number" value="10" min="1" />
-    <p style="font-size:12px;color:#888;margin-top:6px">10 sec × 1000 emails ≈ 2.8 ghante</p>
-
-    <button class="btn" id="startBtn" style="margin-top:20px" onclick="startCampaign()">🚀 Campaign Shuru Karo</button>
-    <button class="btn" id="stopBtn" onclick="stopCampaign()">⏹ Rokko</button>
-  </div>
-
-  <!-- Progress -->
-  <div class="card" id="progressCard">
-    <h2>📊 Live Progress</h2>
-
-    <div class="stats">
-      <div class="stat-box">
-        <div class="stat-num indigo" id="sTotal">0</div>
-        <div class="stat-lbl">Total</div>
+<div id="app">
+  <header class="topbar">
+    <div class="topbar-brand">
+      <div class="brand-mark" style="margin:0;width:38px;height:38px;font-size:15px">M</div>
+      <div>
+        <strong>Mygrow Software</strong>
+        <span>Bulk mail console</span>
       </div>
-      <div class="stat-box">
-        <div class="stat-num green" id="sSent">0</div>
-        <div class="stat-lbl">Bheja</div>
+    </div>
+    <button class="ghost" onclick="lock()">Lock</button>
+  </header>
+
+  <div class="wrap">
+    <div class="stack">
+      <div class="card">
+        <h2>Compose</h2>
+        <div class="row">
+          <div>
+            <label>From name</label>
+            <input id="fromName" type="text" value="Mygrow Software" />
+          </div>
+          <div>
+            <label>From email</label>
+            <input id="from" type="email" value="www.priyasingh200227@gmail.com" />
+          </div>
+        </div>
+        <label>Subject</label>
+        <input id="subject" type="text" placeholder="Campaign subject" />
+        <label>Message (blank line = new paragraph)</label>
+        <textarea id="body" rows="9" placeholder="Hi,&#10;&#10;Thank you for your interest in Mygrow Software.&#10;&#10;Please let us know if you have any questions."></textarea>
       </div>
-      <div class="stat-box">
-        <div class="stat-num red" id="sFailed">0</div>
-        <div class="stat-lbl">Fail</div>
+
+      <div class="card">
+        <h2>Send settings</h2>
+        <label>Gap between emails (seconds)</label>
+        <input id="delay" type="number" value="10" min="1" />
+        <p class="hint">10 sec × 1,000 emails ≈ 2.8 hours. SMTP is already configured on the server.</p>
+        <button class="btn btn-primary" id="startBtn" onclick="startCampaign()">Start campaign</button>
+        <button class="btn" id="stopBtn" onclick="stopCampaign()">Stop sending</button>
       </div>
     </div>
 
-    <div class="bar-wrap"><div class="bar-fill" id="bar"></div></div>
-    <div class="bar-meta">
-      <span id="barLabel">0 / 0</span>
-      <span id="barPct">0%</span>
+    <div class="stack">
+      <div class="card">
+        <h2>Recipients</h2>
+        <label>Excel / CSV</label>
+        <div class="upload-row">
+          <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" />
+          <button class="btn btn-sm" onclick="uploadFile()">Upload</button>
+        </div>
+        <div id="uploadMsg"></div>
+        <label>Or paste emails (one per line)</label>
+        <textarea id="emailList" rows="8" placeholder="one@example.com"></textarea>
+      </div>
+
+      <div class="card" id="progressCard">
+        <h2>Live progress</h2>
+        <div class="stats">
+          <div class="stat-box">
+            <div class="stat-num indigo" id="sTotal">0</div>
+            <div class="stat-lbl">Total</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-num green" id="sSent">0</div>
+            <div class="stat-lbl">Sent</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-num red" id="sFailed">0</div>
+            <div class="stat-lbl">Failed</div>
+          </div>
+        </div>
+        <div class="bar-wrap"><div class="bar-fill" id="bar"></div></div>
+        <div class="bar-meta">
+          <span id="barLabel">0 / 0</span>
+          <span id="barPct">0%</span>
+        </div>
+        <div id="logBox"><div class="log-empty">Activity will appear here</div></div>
+      </div>
     </div>
-
-    <div id="logBox"><div class="log-empty">Log yahan dikhega…</div></div>
   </div>
-
-</div><!-- /container -->
+</div>
 
 <script>
 let sse = null;
+let token = sessionStorage.getItem('gate') || '';
 
-/* ─── File upload ──────────────────────────────────────────────────────────── */
+checkSession();
+
+async function checkSession() {
+  try {
+    const r = await fetch('/api/session', { credentials: 'include', headers: token ? authHeaders() : {} });
+    if (r.ok) showApp();
+  } catch (_) {}
+}
+
+async function unlock() {
+  const password = document.getElementById('gatePass').value;
+  const err = document.getElementById('lockErr');
+  err.style.display = 'none';
+  try {
+    const r = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ password })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    token = d.token;
+    sessionStorage.setItem('gate', token);
+    showApp();
+  } catch (e) {
+    err.textContent = e.message || 'Galat password';
+    err.style.display = 'block';
+  }
+}
+
+async function lock() {
+  sessionStorage.removeItem('gate');
+  token = '';
+  await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('lockScreen').style.display = 'flex';
+  document.getElementById('gatePass').value = '';
+}
+
+function showApp() {
+  document.getElementById('lockScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+}
+
+function authHeaders(json) {
+  const h = { Authorization: 'Bearer ' + token };
+  if (json) h['Content-Type'] = 'application/json';
+  return h;
+}
+
 async function uploadFile() {
   const file = document.getElementById('fileInput').files[0];
   const msg  = document.getElementById('uploadMsg');
-
-  if (!file) { showMsg(msg, 'Pehle file choose karo', true); return; }
-
-  showMsg(msg, '⏳ Parsing...', false);
+  if (!file) { showMsg(msg, 'Choose a file first', true); return; }
+  showMsg(msg, 'Parsing…', false);
   const fd = new FormData();
   fd.append('file', file);
-
   try {
-    const r = await fetch('/api/upload', { method: 'POST', body: fd });
+    const r = await fetch('/api/upload', { method: 'POST', body: fd, credentials: 'include', headers: authHeaders() });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error);
     document.getElementById('emailList').value = d.emails.join('\n');
-    showMsg(msg, `✅ ${d.count} emails load ho gaye`, false);
-  } catch(e) {
-    showMsg(msg, '❌ ' + e.message, true);
+    showMsg(msg, d.count + ' emails loaded', false);
+  } catch (e) {
+    showMsg(msg, e.message, true);
   }
 }
 
 function showMsg(el, text, isErr) {
   el.textContent = text;
-  el.className   = isErr ? 'err' : '';
+  el.className = isErr ? 'err' : '';
   el.style.display = 'block';
 }
 
-/* ─── Start ────────────────────────────────────────────────────────────────── */
 async function startCampaign() {
-  const from     = v('from');
+  const from = v('from');
   const fromName = v('fromName') || 'Mygrow Software';
-  const subject  = v('subject');
-  const body    = v('body');
-  const delay   = +v('delay') || 10;
-
-  const raw    = v('emailList');
+  const subject = v('subject');
+  const body = v('body');
+  const delay = +v('delay') || 10;
   const emails = [...new Set(
-    raw.split(/[\n,;]+/).map(e => e.trim()).filter(e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
+    v('emailList').split(/[\n,;]+/).map(e => e.trim()).filter(e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
   )];
-
-  if (!from) return alert('From email daalo — wahi jo Brevo pe verify kiya hai');
-  if (!subject || !body) return alert('Subject aur body likhna zaroori hai');
-  if (!emails.length)   return alert('Koi valid email nahi mili');
+  if (!from) return alert('From email required');
+  if (!subject || !body) return alert('Subject and message required');
+  if (!emails.length) return alert('No valid emails found');
 
   setRunning(true);
   showProgress(emails.length);
-
   try {
     await openSSE();
     const r = await fetch('/api/start', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      headers: authHeaders(true),
       body: JSON.stringify({ from, fromName, subject, body, emails, delay })
     });
     const d = await r.json();
-    if (!r.ok) { alert(d.error); setRunning(false); return; }
-  } catch(e) {
-    alert('Server se connection nahi hua: ' + e.message);
+    if (!r.ok) { alert(d.error); setRunning(false); }
+  } catch (e) {
+    alert(e.message);
     setRunning(false);
   }
 }
 
-/* ─── Stop ─────────────────────────────────────────────────────────────────── */
 async function stopCampaign() {
-  await fetch('/api/stop', { method: 'POST' });
+  await fetch('/api/stop', { method: 'POST', credentials: 'include', headers: authHeaders(true) });
 }
 
-/* ─── SSE listener ─────────────────────────────────────────────────────────── */
 function openSSE() {
-  if (sse) { sse.close(); }
-  sse = new EventSource('/api/progress');
-
+  if (sse) sse.close();
+  sse = new EventSource('/api/progress?token=' + encodeURIComponent(token));
   sse.addEventListener('update', e => {
     const d = JSON.parse(e.data);
     updateStats(d.sent, d.failed, d.total);
     if (d.last) addLog(d.last);
   });
-
   sse.addEventListener('done', e => {
     const d = JSON.parse(e.data);
     updateStats(d.sent, d.failed, d.sent + d.failed);
     setRunning(false);
     sse.close();
-    alert(`✅ Campaign khatam!\nBheja: ${d.sent}  |  Fail: ${d.failed}`);
+    alert('Campaign finished\nSent: ' + d.sent + '  |  Failed: ' + d.failed);
   });
-
   return new Promise((resolve, reject) => {
     sse.onopen = () => resolve();
-    sse.onerror = () => reject(new Error('Live progress connect nahi hua'));
+    sse.onerror = () => reject(new Error('Live progress connect failed'));
   });
 }
 
-/* ─── UI helpers ───────────────────────────────────────────────────────────── */
 function v(id) { return document.getElementById(id).value.trim(); }
-
 function setRunning(yes) {
   document.getElementById('startBtn').disabled = yes;
   document.getElementById('stopBtn').style.display = yes ? 'block' : 'none';
 }
-
 function showProgress(total) {
   document.getElementById('progressCard').style.display = 'block';
-  document.getElementById('sTotal').textContent   = total;
-  document.getElementById('sSent').textContent    = 0;
-  document.getElementById('sFailed').textContent  = 0;
-  document.getElementById('bar').style.width      = '0%';
-  document.getElementById('barLabel').textContent = `0 / ${total}`;
-  document.getElementById('barPct').textContent   = '0%';
-  document.getElementById('logBox').innerHTML     = '<div class="log-empty">Bhejna shuru ho raha hai…</div>';
+  document.getElementById('sTotal').textContent = total;
+  document.getElementById('sSent').textContent = 0;
+  document.getElementById('sFailed').textContent = 0;
+  document.getElementById('bar').style.width = '0%';
+  document.getElementById('barLabel').textContent = '0 / ' + total;
+  document.getElementById('barPct').textContent = '0%';
+  document.getElementById('logBox').innerHTML = '<div class="log-empty">Sending…</div>';
 }
-
 function updateStats(sent, failed, total) {
   const done = sent + failed;
-  const pct  = total ? Math.round(done / total * 100) : 0;
-  document.getElementById('sSent').textContent    = sent;
-  document.getElementById('sFailed').textContent  = failed;
-  document.getElementById('bar').style.width      = pct + '%';
-  document.getElementById('barLabel').textContent = `${done} / ${total}`;
-  document.getElementById('barPct').textContent   = pct + '%';
+  const pct = total ? Math.round(done / total * 100) : 0;
+  document.getElementById('sSent').textContent = sent;
+  document.getElementById('sFailed').textContent = failed;
+  document.getElementById('bar').style.width = pct + '%';
+  document.getElementById('barLabel').textContent = done + ' / ' + total;
+  document.getElementById('barPct').textContent = pct + '%';
 }
-
 function addLog(entry) {
   const box = document.getElementById('logBox');
-  // Remove empty placeholder
   const empty = box.querySelector('.log-empty');
   if (empty) empty.remove();
-
   const row = document.createElement('div');
   row.className = 'log-row';
-  row.innerHTML = `
-    <span class="log-dot ${entry.status}"></span>
-    <span class="log-email">${entry.email}</span>
-    ${entry.error ? `<span style="font-size:11px;color:#dc2626;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${entry.error}">${entry.error}</span>` : ''}
-    <span class="log-tag ${entry.status}">${entry.status === 'sent' ? 'Bheja' : 'Fail'}</span>
-    <span class="log-time">${entry.time}</span>`;
-
-  box.prepend(row);   // newest first
+  row.innerHTML =
+    '<span class="log-dot ' + entry.status + '"></span>' +
+    '<span class="log-email"></span>' +
+    (entry.error ? '<span style="font-size:11px;color:#f87171;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>' : '') +
+    '<span class="log-tag ' + entry.status + '">' + (entry.status === 'sent' ? 'Sent' : 'Fail') + '</span>' +
+    '<span class="log-time"></span>';
+  row.querySelector('.log-email').textContent = entry.email;
+  if (entry.error) row.querySelector('span[style]').textContent = entry.error;
+  row.querySelector('.log-time').textContent = entry.time;
+  box.prepend(row);
 }
 </script>
 </body>
