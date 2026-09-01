@@ -69,6 +69,10 @@ let state = {
 let clients = [];       // SSE connections
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
 async function sendViaBrevoApi({ to, fromEmail, displayName, subject, html, text }) {
   const apiKey = process.env.BREVO_API_KEY;
   const r = await fetch('https://api.brevo.com/v3/smtp/email', {
