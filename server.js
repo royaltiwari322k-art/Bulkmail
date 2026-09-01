@@ -69,8 +69,27 @@ let state = {
 let clients = [];       // SSE connections
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function sleep(ms) {
-  return new Promise(r => setTimeout(r, ms));
+async function sendViaBrevoApi({ to, fromEmail, displayName, subject, html, text }) {
+  const apiKey = process.env.BREVO_API_KEY;
+  const r = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'api-key': apiKey,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      sender: { name: displayName, email: fromEmail },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+      textContent: text,
+      replyTo: { email: fromEmail, name: displayName }
+    })
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.message || data.error || 'Brevo API fail');
+  return data;
 }
 
 function escapeHtml(s) {
@@ -193,17 +212,27 @@ app.post('/api/start', requireAuth, async (req, res) => {
   if (/smtp-brevo\.com$/i.test(fromEmail))
     return res.status(400).json({ error: 'From mein SMTP login mat daalo. Apna verified email use karo (jaise Gmail).' });
 
+  const useApi = !!process.env.BREVO_API_KEY;
   let transporter;
-  try {
-    transporter = nodemailer.createTransport({
-      host: SMTP.host,
-      port: SMTP.port,
-      secure: SMTP.port === 465,
-      auth: { user: SMTP.user, pass: SMTP.pass }
-    });
-    await transporter.verify();
-  } catch(e) {
-    return res.status(400).json({ error: 'SMTP login fail: ' + e.message });
+
+  if (!useApi) {
+    if (!SMTP.user || !SMTP.pass)
+      return res.status(400).json({ error: 'SMTP/API key missing. Render pe BREVO_API_KEY lagao (SMTP free Render pe block hai).' });
+    try {
+      transporter = nodemailer.createTransport({
+        host: SMTP.host,
+        port: SMTP.port,
+        secure: SMTP.port === 465,
+        connectionTimeout: 12000,
+        greetingTimeout: 12000,
+        auth: { user: SMTP.user, pass: SMTP.pass }
+      });
+      await transporter.verify();
+    } catch (e) {
+      return res.status(400).json({
+        error: 'SMTP fail (Render Free 587 block karta hai). Brevo API key banao aur BREVO_API_KEY env mein daalo. ' + e.message
+      });
+    }
   }
 
   const delaySec = Math.max(1, +delay || 10);
@@ -230,15 +259,20 @@ app.post('/api/start', requireAuth, async (req, res) => {
       const text = String(body).trim() + `\n\n— ${displayName}\nUnsubscribe: ${unsubUrl}`;
 
       try {
-        const info = await transporter.sendMail({
-          from: `"${displayName}" <${fromEmail}>`,
-          replyTo: fromEmail,
-          to,
-          subject,
-          html,
-          text
-        });
-        console.log('SENT', to, info.response || info.messageId);
+        if (useApi) {
+          const info = await sendViaBrevoApi({ to, fromEmail, displayName, subject, html, text });
+          console.log('SENT', to, info.messageId || 'api');
+        } else {
+          const info = await transporter.sendMail({
+            from: `"${displayName}" <${fromEmail}>`,
+            replyTo: fromEmail,
+            to,
+            subject,
+            html,
+            text
+          });
+          console.log('SENT', to, info.response || info.messageId);
+        }
         state.sent++;
         state.log.unshift({ email: to, status: 'sent',   time: new Date().toLocaleTimeString() });
       } catch(e) {
