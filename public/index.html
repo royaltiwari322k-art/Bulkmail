@@ -211,7 +211,7 @@
         <h2>Send settings</h2>
         <label>Gap between emails (seconds)</label>
         <input id="delay" type="number" value="10" min="1" />
-        <p class="hint">10 sec × 1,000 emails ≈ 2.8 hours. SMTP is already configured on the server.</p>
+        <p class="hint">10 sec × 1,000 emails ≈ 2.8 hours. Campaign chalte tab band mat karo — Render Free 15 min idle pe so jaata hai.</p>
         <button class="btn btn-primary" id="startBtn" onclick="startCampaign()">Start campaign</button>
         <button class="btn" id="stopBtn" onclick="stopCampaign()">Stop sending</button>
       </div>
@@ -260,6 +260,7 @@
 <script>
 let sse = null;
 let token = sessionStorage.getItem('gate') || '';
+let keepAlive = null;
 
 checkSession();
 
@@ -396,6 +397,12 @@ function v(id) { return document.getElementById(id).value.trim(); }
 function setRunning(yes) {
   document.getElementById('startBtn').disabled = yes;
   document.getElementById('stopBtn').style.display = yes ? 'block' : 'none';
+  if (keepAlive) { clearInterval(keepAlive); keepAlive = null; }
+  if (yes) {
+    keepAlive = setInterval(() => {
+      fetch('/api/ping', { credentials: 'include', headers: authHeaders() }).catch(() => {});
+    }, 20000);
+  }
 }
 function showProgress(total) {
   document.getElementById('progressCard').style.display = 'block';

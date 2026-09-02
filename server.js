@@ -47,6 +47,7 @@ app.post('/api/login', (req, res) => {
 });
 
 app.get('/api/session', requireAuth, (req, res) => res.json({ ok: true }));
+app.get('/api/ping', requireAuth, (req, res) => res.json({ ok: true, running: state.running }));
 
 app.post('/api/logout', (req, res) => {
   sessions.delete(cookieToken(req));
