@@ -271,6 +271,14 @@ app.get('/api/history/:campaignId', requireAuth, async (req, res) => {
   res.json({ campaign, recipients });
 });
 
+app.delete('/api/history/:campaignId', requireAuth, async (req, res) => {
+  if (!mongoDb) return res.status(503).json({ error: 'MongoDB history enabled nahi hai' });
+  const result = await mongoDb.collection('campaigns').deleteOne({ campaignId: req.params.campaignId });
+  if (!result.deletedCount) return res.status(404).json({ error: 'Campaign nahi mili' });
+  await mongoDb.collection('email_events').deleteMany({ campaignId: req.params.campaignId });
+  res.json({ ok: true });
+});
+
 app.get('/track/open/:trackingId.gif', async (req, res) => {
   res.set({ 'Content-Type': 'image/gif', 'Cache-Control': 'no-store, no-cache, must-revalidate' });
   if (mongoDb) {

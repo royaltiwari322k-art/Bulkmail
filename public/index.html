@@ -164,15 +164,17 @@
     .log-time { font-size: 11px; color: #64748b; }
     .log-empty { text-align: center; color: #64748b; padding: 22px; font-size: 13px; }
     #historyCard { margin-top: 20px; }
-    .history-row { display: grid; grid-template-columns: 1.4fr repeat(4, .7fr); gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); font-size: 12px; }
+    .history-row { display: grid; grid-template-columns: 1.4fr repeat(4, .7fr) auto; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); font-size: 12px; }
     .history-row.clickable { cursor: pointer; }
     .history-row.clickable:hover { background: rgba(91,141,239,.08); }
     .history-head { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
     .history-status { color: var(--muted); }
     .history-status.opened { color: var(--ok); }
     .history-status.unopened { color: #fbbf24; }
+    .history-delete { border: 1px solid rgba(248,113,113,.35); background: transparent; color: var(--bad); border-radius: 6px; padding: 5px 8px; cursor: pointer; font: inherit; font-size: 11px; }
+    .history-delete:hover { background: rgba(248,113,113,.12); }
     #historyDetails { margin-top: 14px; max-height: 260px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; display: none; }
-    @media (max-width: 560px) { .history-row { grid-template-columns: 1fr repeat(2, .7fr); } .history-row span:nth-child(4), .history-row span:nth-child(5) { display: none; } }
+    @media (max-width: 560px) { .history-row { grid-template-columns: 1fr repeat(2, .7fr) auto; } .history-row span:nth-child(4), .history-row span:nth-child(5) { display: none; } }
   </style>
 </head>
 <body>
@@ -448,21 +450,39 @@ async function loadHistory() {
       list.innerHTML = '<div class="log-empty">Abhi koi campaign history nahi hai</div>';
       return;
     }
-    list.innerHTML = '<div class="history-row history-head"><span>Campaign</span><span>Total</span><span>Sent</span><span>Failed</span><span>Opened</span></div>';
+    list.innerHTML = '<div class="history-row history-head"><span>Campaign</span><span>Total</span><span>Sent</span><span>Failed</span><span>Opened</span><span>Action</span></div>';
     d.campaigns.forEach(campaign => {
       const row = document.createElement('div');
       row.className = 'history-row clickable';
-      row.innerHTML = '<span></span><span></span><span></span><span></span><span></span>';
+      row.innerHTML = '<span></span><span></span><span></span><span></span><span></span><button class="history-delete" type="button">Delete</button>';
       row.children[0].textContent = new Date(campaign.createdAt).toLocaleString() + ' · ' + campaign.subject;
       row.children[1].textContent = campaign.total;
       row.children[2].textContent = campaign.sent;
       row.children[3].textContent = campaign.failed;
       row.children[4].textContent = campaign.opened || 0;
-      row.onclick = () => loadHistoryDetails(campaign.campaignId);
+      row.onclick = event => {
+        if (!event.target.closest('.history-delete')) loadHistoryDetails(campaign.campaignId);
+      };
+      row.querySelector('.history-delete').onclick = () => deleteHistory(campaign.campaignId);
       list.appendChild(row);
     });
   } catch (error) {
     list.innerHTML = '<div class="log-empty">' + error.message + '</div>';
+  }
+}
+
+async function deleteHistory(campaignId) {
+  if (!confirm('Is campaign ki poori history delete karni hai?')) return;
+  try {
+    const r = await fetch('/api/history/' + encodeURIComponent(campaignId), {
+      method: 'DELETE', credentials: 'include', headers: authHeaders()
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Delete failed');
+    document.getElementById('historyDetails').style.display = 'none';
+    loadHistory();
+  } catch (error) {
+    alert(error.message);
   }
 }
 
