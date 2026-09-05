@@ -11,6 +11,7 @@ const app  = express();
 const PORT = process.env.PORT || 3000;
 const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
 const APP_PASSWORD = process.env.APP_PASSWORD || '7817808959';
+const DAILY_SEND_LIMIT = 300;
 const sessions = new Set();
 
 const SMTP = {
@@ -67,11 +68,19 @@ let state = {
   log:     []           // [{ email, status, error?, time }]
 };
 
+let dailyUsage = { date: new Date().toISOString().slice(0, 10), triggered: 0 };
+
 let clients = [];       // SSE connections
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
+}
+
+function getDailyUsage() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (dailyUsage.date !== today) dailyUsage = { date: today, triggered: 0 };
+  return dailyUsage;
 }
 
 async function sendViaBrevoApi({ to, fromEmail, displayName, subject, html, text }) {
@@ -212,6 +221,12 @@ app.post('/api/start', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Subject ya email body khaali hai' });
   if (!emails?.length)
     return res.status(400).json({ error: 'Koi email nahi mili list mein' });
+  const usage = getDailyUsage();
+  const remaining = DAILY_SEND_LIMIT - usage.triggered;
+  if (emails.length > remaining)
+    return res.status(400).json({ error: remaining > 0
+      ? `Aaj sirf ${remaining} emails ki limit baaki hai. Maximum ${DAILY_SEND_LIMIT} emails per day bhej sakte ho.`
+      : `Your today limit is complete. Aaj maximum ${DAILY_SEND_LIMIT} emails already trigger ho chuki hain.` });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fromEmail))
     return res.status(400).json({ error: 'From email galat hai — Brevo mein verified sender daalo (Gmail/domain), smtp-brevo.com nahi' });
   if (/smtp-brevo\.com$/i.test(fromEmail))
@@ -241,6 +256,7 @@ app.post('/api/start', requireAuth, async (req, res) => {
   }
 
   const delaySec = Math.max(1, +delay || 10);
+  usage.triggered += emails.length;
 
   // State reset
   state = { running: true, stop: false, total: emails.length, sent: 0, failed: 0, log: [] };
