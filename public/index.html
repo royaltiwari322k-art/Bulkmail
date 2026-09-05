@@ -136,6 +136,10 @@
       background: var(--accent); color: #fff; }
     #stopBtn { background: #dc2626; color: #fff; display: none; margin-top: 10px; }
     .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+    .quota { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+    .quota-box { background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 6px; text-align: center; }
+    .quota-num { font-size: 18px; font-weight: 700; }
+    .quota-label { color: var(--muted); font-size: 10px; margin-top: 2px; }
 
     #progressCard { display: none; }
     .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; text-align: center; }
@@ -222,6 +226,11 @@
         <label>Gap between emails (seconds)</label>
         <input id="delay" type="number" value="10" min="1" />
         <p class="hint">10 sec × 1,000 emails ≈ 2.8 hours. Campaign chalte tab band mat karo — Render Free 15 min idle pe so jaata hai.</p>
+        <div class="quota" aria-label="Daily email quota">
+          <div class="quota-box"><div class="quota-num" id="quotaLimit">1,000</div><div class="quota-label">Total per day</div></div>
+          <div class="quota-box"><div class="quota-num" id="quotaUsed">0</div><div class="quota-label">Used today</div></div>
+          <div class="quota-box"><div class="quota-num" id="quotaRemaining">1,000</div><div class="quota-label">Left today</div></div>
+        </div>
         <button class="btn btn-primary" id="startBtn" onclick="startCampaign()">Start campaign</button>
         <button class="btn" id="stopBtn" onclick="stopCampaign()">Stop sending</button>
       </div>
@@ -322,6 +331,7 @@ function showApp() {
   document.getElementById('lockScreen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   loadHistory();
+  loadQuota();
 }
 
 function authHeaders(json) {
@@ -404,12 +414,24 @@ function openSSE() {
     setRunning(false);
     sse.close();
     loadHistory();
+    loadQuota();
     alert('Campaign finished\nSent: ' + d.sent + '  |  Failed: ' + d.failed);
   });
   return new Promise((resolve, reject) => {
     sse.onopen = () => resolve();
     sse.onerror = () => reject(new Error('Live progress connect failed'));
   });
+}
+
+async function loadQuota() {
+  try {
+    const r = await fetch('/api/quota', { credentials: 'include', headers: authHeaders() });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Quota load failed');
+    document.getElementById('quotaLimit').textContent = d.limit.toLocaleString();
+    document.getElementById('quotaUsed').textContent = d.used.toLocaleString();
+    document.getElementById('quotaRemaining').textContent = d.remaining.toLocaleString();
+  } catch (_) {}
 }
 
 async function loadHistory() {
