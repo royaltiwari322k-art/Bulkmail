@@ -32,7 +32,12 @@ async function connectDatabase() {
     return;
   }
   try {
-    const client = new MongoClient(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000 });
+    const client = new MongoClient(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 10000,
+      connectTimeoutMS: 10000,
+      tls: true,
+      family: 4
+    });
     await client.connect();
     mongoDb = client.db();
     await mongoDb.collection('campaigns').createIndex({ createdAt: -1 });
