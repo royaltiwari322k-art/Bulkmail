@@ -12,6 +12,15 @@ npm start
 
 Then open **http://localhost:3000** in your browser.
 
+## MongoDB history and open tracking
+
+Set `MONGODB_URI` in `.env` to enable permanent campaign history, recipient
+sent/failed status, and approximate email open tracking. The portal shows the
+last 100 campaigns and each recipient as `Seen` or `Unseen`.
+
+For Render, add the same `MONGODB_URI` under **Environment Variables**. Never
+commit `.env` or expose the MongoDB password in source code.
+
 ## How it works
 
 ```

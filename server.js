@@ -3,6 +3,7 @@ const nodemailer = require('nodemailer');
 const multer     = require('multer');
 const XLSX       = require('xlsx');
 const path       = require('path');
+const { MongoClient } = require('mongodb');
 
 require('dotenv').config();
 const crypto = require('crypto');
@@ -13,6 +14,7 @@ const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\
 const APP_PASSWORD = process.env.APP_PASSWORD || '7817808959';
 const DAILY_SEND_LIMIT = 300;
 const sessions = new Set();
+let mongoDb = null;
 
 const SMTP = {
   host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
@@ -23,6 +25,28 @@ const SMTP = {
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+async function connectDatabase() {
+  if (!process.env.MONGODB_URI) {
+    console.warn('MONGODB_URI missing; history and open tracking disabled');
+    return;
+  }
+  try {
+    const client = new MongoClient(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000 });
+    await client.connect();
+    mongoDb = client.db();
+    await mongoDb.collection('campaigns').createIndex({ createdAt: -1 });
+    await mongoDb.collection('email_events').createIndex({ campaignId: 1, createdAt: -1 });
+    await mongoDb.collection('email_events').createIndex({ trackingId: 1 }, { unique: true });
+    console.log('MongoDB connected');
+  } catch (error) {
+    console.error('MongoDB connection failed; continuing without history:', error.message);
+  }
+}
+
+function trackingPixel() {
+  return Buffer.from('R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=', 'base64');
+}
 
 function cookieToken(req) {
   const raw = req.headers.cookie || '';
@@ -125,7 +149,7 @@ function bodyToHtml(raw) {
     .join('');
 }
 
-function wrapEmail({ displayName, inner, unsubUrl }) {
+function wrapEmail({ displayName, inner, unsubUrl, trackingUrl = '' }) {
   const brand = escapeHtml(displayName);
   return `<!DOCTYPE html>
 <html>
@@ -166,6 +190,7 @@ function wrapEmail({ displayName, inner, unsubUrl }) {
             </td>
           </tr>
         </table>
+        ${trackingUrl ? `<img src="${trackingUrl}" width="1" height="1" alt="" style="display:none!important;width:1px;height:1px;border:0;" />` : ''}
       </td>
     </tr>
   </table>
@@ -207,6 +232,45 @@ app.post('/api/upload', requireAuth, upload.single('file'), (req, res) => {
   if (!emails.length) return res.status(400).json({ error: '"email" column nahi mili ya koi valid email nahi' });
 
   res.json({ emails, count: emails.length });
+});
+
+app.get('/api/history', requireAuth, async (req, res) => {
+  if (!mongoDb) return res.json({ enabled: false, campaigns: [] });
+  const campaigns = await mongoDb.collection('campaigns')
+    .find({}, { projection: { _id: 0 } })
+    .sort({ createdAt: -1 })
+    .limit(100)
+    .toArray();
+  await Promise.all(campaigns.map(async campaign => {
+    campaign.opened = await mongoDb.collection('email_events').countDocuments({
+      campaignId: campaign.campaignId, openedAt: { $ne: null }
+    });
+  }));
+  res.json({ enabled: true, campaigns });
+});
+
+app.get('/api/history/:campaignId', requireAuth, async (req, res) => {
+  if (!mongoDb) return res.status(503).json({ error: 'MongoDB history enabled nahi hai' });
+  const campaign = await mongoDb.collection('campaigns').findOne(
+    { campaignId: req.params.campaignId }, { projection: { _id: 0 } }
+  );
+  if (!campaign) return res.status(404).json({ error: 'Campaign nahi mili' });
+  const recipients = await mongoDb.collection('email_events')
+    .find({ campaignId: req.params.campaignId }, { projection: { _id: 0, trackingId: 0 } })
+    .sort({ createdAt: 1 })
+    .toArray();
+  res.json({ campaign, recipients });
+});
+
+app.get('/track/open/:trackingId.gif', async (req, res) => {
+  res.set({ 'Content-Type': 'image/gif', 'Cache-Control': 'no-store, no-cache, must-revalidate' });
+  if (mongoDb) {
+    await mongoDb.collection('email_events').updateOne(
+      { trackingId: req.params.trackingId, openedAt: null },
+      { $set: { openedAt: new Date(), opened: true } }
+    );
+  }
+  res.send(trackingPixel());
 });
 
 // ── API: Start campaign ────────────────────────────────────────────────────────
@@ -257,6 +321,28 @@ app.post('/api/start', requireAuth, async (req, res) => {
 
   const delaySec = Math.max(1, +delay || 10);
   usage.triggered += emails.length;
+  const campaignId = crypto.randomUUID();
+  const recipients = emails.map(email => ({
+    campaignId,
+    trackingId: crypto.randomUUID(),
+    email: email.trim(),
+    subject,
+    status: 'queued',
+    opened: false,
+    openedAt: null,
+    error: null,
+    createdAt: new Date(),
+    sentAt: null
+  }));
+
+  if (mongoDb) {
+    await mongoDb.collection('campaigns').insertOne({
+      campaignId, subject, fromEmail, fromName: displayName,
+      total: emails.length, sent: 0, failed: 0, opened: 0,
+      status: 'running', createdAt: new Date(), finishedAt: null
+    });
+    await mongoDb.collection('email_events').insertMany(recipients);
+  }
 
   // State reset
   state = { running: true, stop: false, total: emails.length, sent: 0, failed: 0, log: [] };
@@ -271,11 +357,13 @@ app.post('/api/start', requireAuth, async (req, res) => {
       if (state.stop) break;
 
       const to = emails[i].trim();
+      const recipient = recipients[i];
       const unsubUrl = `${BASE_URL}/unsubscribe?e=${encodeURIComponent(to)}`;
       const html = wrapEmail({
         displayName,
         inner: bodyToHtml(body),
-        unsubUrl
+        unsubUrl,
+        trackingUrl: `${BASE_URL}/track/open/${recipient.trackingId}.gif`
       });
       const text = String(body).trim() + `\n\n— ${displayName}\nUnsubscribe: ${unsubUrl}`;
 
@@ -294,10 +382,18 @@ app.post('/api/start', requireAuth, async (req, res) => {
           });
           console.log('SENT', to, info.response || info.messageId);
         }
+        if (mongoDb) await mongoDb.collection('email_events').updateOne(
+          { trackingId: recipient.trackingId },
+          { $set: { status: 'sent', sentAt: new Date() } }
+        );
         state.sent++;
         state.log.unshift({ email: to, status: 'sent',   time: new Date().toLocaleTimeString() });
       } catch(e) {
         console.error('FAIL', to, e.message);
+        if (mongoDb) await mongoDb.collection('email_events').updateOne(
+          { trackingId: recipient.trackingId },
+          { $set: { status: 'failed', error: e.message } }
+        );
         state.failed++;
         state.log.unshift({ email: to, status: 'failed', time: new Date().toLocaleTimeString(), error: e.message });
       }
@@ -308,6 +404,10 @@ app.post('/api/start', requireAuth, async (req, res) => {
     }
 
     state.running = false;
+    if (mongoDb) await mongoDb.collection('campaigns').updateOne(
+      { campaignId },
+      { $set: { sent: state.sent, failed: state.failed, status: 'finished', finishedAt: new Date() } }
+    );
     push('done', { sent: state.sent, failed: state.failed });
   })();
 });
@@ -337,4 +437,7 @@ app.get('/unsubscribe', (req, res) => {
     ✅ ${req.query.e || 'Email'} unsubscribe ho gaya.</h2>`);
 });
 
-app.listen(PORT, '0.0.0.0', () => console.log(`\n✅ ${BASE_URL}\n`));
+app.listen(PORT, '0.0.0.0', () => {
+  connectDatabase();
+  console.log(`\n✅ ${BASE_URL}\n`);
+});
