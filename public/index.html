@@ -391,10 +391,11 @@ async function startCampaign() {
       body: JSON.stringify({ from, fromName, subject, body, emails, delay })
     });
     const d = await r.json();
-    if (!r.ok) { alert(d.error); setRunning(false); }
+    if (!r.ok) { alert(d.error); setRunning(false); loadQuota(); }
   } catch (e) {
     alert(e.message);
     setRunning(false);
+    loadQuota();
   }
 }
 

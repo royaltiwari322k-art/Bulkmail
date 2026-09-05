@@ -78,9 +78,9 @@ app.post('/api/login', (req, res) => {
 
 app.get('/api/session', requireAuth, (req, res) => res.json({ ok: true }));
 app.get('/api/ping', requireAuth, (req, res) => res.json({ ok: true, running: state.running }));
-app.get('/api/quota', requireAuth, (req, res) => {
-  const usage = getDailyUsage();
-  res.json({ limit: DAILY_SEND_LIMIT, used: usage.triggered, remaining: DAILY_SEND_LIMIT - usage.triggered });
+app.get('/api/quota', requireAuth, async (req, res) => {
+  const usage = await getDailyUsage();
+  res.json({ limit: DAILY_SEND_LIMIT, used: usage.triggered, remaining: Math.max(0, DAILY_SEND_LIMIT - usage.triggered) });
 });
 
 app.post('/api/logout', (req, res) => {
@@ -110,9 +110,36 @@ function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-function getDailyUsage() {
+async function getDailyUsage() {
   const today = new Date().toISOString().slice(0, 10);
+  if (mongoDb) {
+    const record = await mongoDb.collection('daily_usage').findOne({ _id: today });
+    return { date: today, triggered: record?.triggered || 0 };
+  }
   if (dailyUsage.date !== today) dailyUsage = { date: today, triggered: 0 };
+  return dailyUsage;
+}
+
+async function reserveDailyQuota(count) {
+  const today = new Date().toISOString().slice(0, 10);
+  if (mongoDb) {
+    const collection = mongoDb.collection('daily_usage');
+    await collection.updateOne(
+      { _id: today },
+      { $setOnInsert: { triggered: 0, updatedAt: new Date() } },
+      { upsert: true }
+    );
+    const result = await collection.findOneAndUpdate(
+      { _id: today, triggered: { $lte: DAILY_SEND_LIMIT - count } },
+      { $inc: { triggered: count }, $set: { updatedAt: new Date() } },
+      { returnDocument: 'after' }
+    );
+    if (!result) return null;
+    return { date: today, triggered: result.triggered };
+  }
+  if (dailyUsage.date !== today) dailyUsage = { date: today, triggered: 0 };
+  if (dailyUsage.triggered + count > DAILY_SEND_LIMIT) return null;
+  dailyUsage.triggered += count;
   return dailyUsage;
 }
 
@@ -302,7 +329,7 @@ app.post('/api/start', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Subject ya email body khaali hai' });
   if (!emails?.length)
     return res.status(400).json({ error: 'Koi email nahi mili list mein' });
-  const usage = getDailyUsage();
+  const usage = await getDailyUsage();
   const remaining = DAILY_SEND_LIMIT - usage.triggered;
   if (emails.length > remaining)
     return res.status(400).json({ error: remaining > 0
@@ -337,7 +364,14 @@ app.post('/api/start', requireAuth, async (req, res) => {
   }
 
   const delaySec = Math.max(1, +delay || 10);
-  usage.triggered += emails.length;
+  const reserved = await reserveDailyQuota(emails.length);
+  if (!reserved) {
+    const latest = await getDailyUsage();
+    const remainingNow = Math.max(0, DAILY_SEND_LIMIT - latest.triggered);
+    return res.status(400).json({ error: remainingNow > 0
+      ? `Aaj sirf ${remainingNow} emails ki limit baaki hai. Maximum ${DAILY_SEND_LIMIT} emails per day bhej sakte ho.`
+      : `Your today limit is complete. Aaj maximum ${DAILY_SEND_LIMIT} emails already trigger ho chuki hain.` });
+  }
   const campaignId = crypto.randomUUID();
   const recipients = emails.map(email => ({
     campaignId,
