@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Bulk Email Marketing Tool with delay queue, Excel upload, and live progress dashboard",
   "main": "server.js",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js"
