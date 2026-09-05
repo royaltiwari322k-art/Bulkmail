@@ -12,7 +12,7 @@ const app  = express();
 const PORT = process.env.PORT || 3000;
 const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
 const APP_PASSWORD = process.env.APP_PASSWORD || '7817808959';
-const DAILY_SEND_LIMIT = 300;
+const DAILY_SEND_LIMIT = 1000;
 const sessions = new Set();
 let mongoDb = null;
 
