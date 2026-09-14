@@ -227,11 +227,11 @@
         <h2>Send settings</h2>
         <label>Gap between emails (seconds)</label>
         <input id="delay" type="number" value="10" min="1" />
-        <p class="hint">10 sec × 1,000 emails ≈ 2.8 hours. Campaign chalte tab band mat karo — Render Free 15 min idle pe so jaata hai.</p>
+        <p class="hint">10 sec × 1,500 emails ≈ 4.2 hours. Campaign chalte tab band mat karo — Render Free 15 min idle pe so jaata hai.</p>
         <div class="quota" aria-label="Daily email quota">
-          <div class="quota-box"><div class="quota-num" id="quotaLimit">1,000</div><div class="quota-label">Total per day</div></div>
+          <div class="quota-box"><div class="quota-num" id="quotaLimit">1,500</div><div class="quota-label">Total per day</div></div>
           <div class="quota-box"><div class="quota-num" id="quotaUsed">0</div><div class="quota-label">Used today</div></div>
-          <div class="quota-box"><div class="quota-num" id="quotaRemaining">1,000</div><div class="quota-label">Left today</div></div>
+          <div class="quota-box"><div class="quota-num" id="quotaRemaining">1,500</div><div class="quota-label">Left today</div></div>
         </div>
         <button class="btn btn-primary" id="startBtn" onclick="startCampaign()">Start campaign</button>
         <button class="btn" id="stopBtn" onclick="stopCampaign()">Stop sending</button>
@@ -378,7 +378,7 @@ async function startCampaign() {
   if (!from) return alert('From email required');
   if (!subject || !body) return alert('Subject and message required');
   if (!emails.length) return alert('No valid emails found');
-  if (emails.length > 1000) return alert('Your today limit is complete. Ek campaign mein maximum 1000 emails bhej sakte ho.');
+  if (emails.length > 1500) return alert('Your today limit is complete. Ek campaign mein maximum 1500 emails bhej sakte ho.');
 
   setRunning(true);
   showProgress(emails.length);
