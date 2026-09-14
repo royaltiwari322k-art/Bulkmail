@@ -180,9 +180,39 @@
     .history-delete:hover { background: rgba(248,113,113,.12); }
     #historyDetails { margin-top: 14px; max-height: 260px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; display: none; }
     @media (max-width: 560px) { .history-row { grid-template-columns: 1fr repeat(2, .7fr) auto; } .history-row span:nth-child(4), .history-row span:nth-child(5) { display: none; } }
+
+    #maintenanceScreen {
+      position: fixed; inset: 0; z-index: 20;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px; background: var(--bg);
+    }
+    .maintenance-card {
+      width: 100%; max-width: 520px; text-align: center;
+      background: linear-gradient(180deg, #1a2438, #121a2b);
+      border: 1px solid var(--line); border-radius: 20px;
+      padding: 42px 30px 34px; box-shadow: 0 24px 80px rgba(0,0,0,.45);
+    }
+    .maintenance-card .brand-mark { margin: 0 auto 20px; }
+    .maintenance-card h1 { font-size: 25px; margin-bottom: 10px; }
+    .maintenance-card p { color: var(--muted); line-height: 1.6; font-size: 15px; }
+    .maintenance-timer {
+      margin-top: 24px; color: var(--text); font-size: 34px; font-weight: 700;
+      font-variant-numeric: tabular-nums; letter-spacing: .04em;
+    }
+    .maintenance-label { margin-top: 6px; color: var(--muted); font-size: 12px; }
   </style>
 </head>
 <body>
+
+<div id="maintenanceScreen">
+  <div class="maintenance-card">
+    <div class="brand-mark">M</div>
+    <h1>Website Under Maintenance</h1>
+    <p>Sorry for the inconvenience. We will get back in time.</p>
+    <div class="maintenance-timer" id="maintenanceTimer">02:00:00</div>
+    <div class="maintenance-label">We will be back shortly</div>
+  </div>
+</div>
 
 <div id="lockScreen">
   <div class="lock-card">
@@ -297,8 +327,31 @@
 let sse = null;
 let token = sessionStorage.getItem('gate') || '';
 let keepAlive = null;
+const MAINTENANCE_END = Date.parse('2026-09-14T18:43:22+05:30');
 
-checkSession();
+initMaintenance();
+
+function initMaintenance() {
+  updateMaintenanceTimer();
+  const timer = setInterval(() => {
+    if (!updateMaintenanceTimer()) clearInterval(timer);
+  }, 1000);
+}
+
+function updateMaintenanceTimer() {
+  const remaining = Math.max(0, MAINTENANCE_END - Date.now());
+  if (!remaining) {
+    document.getElementById('maintenanceScreen').remove();
+    checkSession();
+    return false;
+  }
+  const totalSeconds = Math.ceil(remaining / 1000);
+  const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+  const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+  const seconds = String(totalSeconds % 60).padStart(2, '0');
+  document.getElementById('maintenanceTimer').textContent = `${hours}:${minutes}:${seconds}`;
+  return true;
+}
 
 async function checkSession() {
   try {
