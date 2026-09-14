@@ -272,11 +272,22 @@ app.post('/api/upload', requireAuth, upload.single('file'), (req, res) => {
 
 app.get('/api/history', requireAuth, async (req, res) => {
   if (!mongoDb) return res.json({ enabled: false, campaigns: [] });
-  const campaigns = await mongoDb.collection('campaigns')
-    .find({}, { projection: { _id: 0 } })
-    .sort({ createdAt: -1 })
-    .limit(100)
-    .toArray();
+  const date = String(req.query.date || '');
+  const query = {};
+  if (date) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ error: 'Date format galat hai' });
+    }
+    const start = new Date(`${date}T00:00:00.000Z`);
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 1);
+    query.createdAt = { $gte: start, $lt: end };
+  }
+  const cursor = mongoDb.collection('campaigns')
+    .find(query, { projection: { _id: 0 } })
+    .sort({ createdAt: -1 });
+  if (!date) cursor.limit(100);
+  const campaigns = await cursor.toArray();
   await Promise.all(campaigns.map(async campaign => {
     campaign.opened = await mongoDb.collection('email_events').countDocuments({
       campaignId: campaign.campaignId, openedAt: { $ne: null }

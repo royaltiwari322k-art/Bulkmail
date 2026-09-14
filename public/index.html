@@ -168,6 +168,11 @@
     .history-row.clickable { cursor: pointer; }
     .history-row.clickable:hover { background: rgba(91,141,239,.08); }
     .history-head { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+    .history-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+    .history-toolbar input { width: auto; min-width: 150px; padding: 8px 10px; font-size: 12px; }
+    .history-toolbar .btn { margin: 0; }
+    #historyList { max-height: 300px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
+    @media (max-width: 560px) { .history-toolbar { align-items: stretch; flex-direction: column; } .history-toolbar input { width: 100%; } }
     .history-status { color: var(--muted); }
     .history-status.opened { color: var(--ok); }
     .history-status.unopened { color: #fbbf24; }
@@ -277,6 +282,10 @@
 
       <div class="card" id="historyCard">
         <h2>Campaign history</h2>
+        <div class="history-toolbar">
+          <input id="historyDate" type="date" aria-label="Filter campaign history by date" onchange="loadHistory()" />
+          <button class="btn btn-sm" type="button" onclick="clearHistoryDate()">All dates</button>
+        </div>
         <div id="historyList"><div class="log-empty">Loading history…</div></div>
         <div id="historyDetails"></div>
       </div>
@@ -440,7 +449,9 @@ async function loadQuota() {
 async function loadHistory() {
   const list = document.getElementById('historyList');
   try {
-    const r = await fetch('/api/history', { credentials: 'include', headers: authHeaders() });
+    const date = document.getElementById('historyDate').value;
+    const query = date ? '?date=' + encodeURIComponent(date) : '';
+    const r = await fetch('/api/history' + query, { credentials: 'include', headers: authHeaders() });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || 'History load failed');
     if (!d.enabled) {
@@ -470,6 +481,12 @@ async function loadHistory() {
   } catch (error) {
     list.innerHTML = '<div class="log-empty">' + error.message + '</div>';
   }
+}
+
+function clearHistoryDate() {
+  document.getElementById('historyDate').value = '';
+  document.getElementById('historyDetails').style.display = 'none';
+  loadHistory();
 }
 
 async function deleteHistory(campaignId) {
