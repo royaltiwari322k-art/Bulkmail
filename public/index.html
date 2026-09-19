@@ -18,7 +18,29 @@
       --accent2: #3d6fd8;
       --ok: #34d399;
       --bad: #f87171;
+      --card-gradient: linear-gradient(180deg, #1a2438, #121a2b);
+      --topbar-bg: rgba(11,18,32,.75);
+      --shadow: 0 24px 80px rgba(0,0,0,.45);
+      --note-text: #b8c9ea;
+      --track: #1e293b;
+      --subtle-text: #64748b;
       --radius: 16px;
+    }
+    html[data-theme="light"] {
+      --bg: #f3f6fb;
+      --bg2: #ffffff;
+      --card: #ffffff;
+      --line: #dbe3ef;
+      --text: #172033;
+      --muted: #667085;
+      --accent: #3867d6;
+      --accent2: #2852b8;
+      --card-gradient: linear-gradient(180deg, #ffffff, #f8faff);
+      --topbar-bg: rgba(255,255,255,.82);
+      --shadow: 0 24px 80px rgba(31,49,85,.14);
+      --note-text: #42577d;
+      --track: #e5eaf3;
+      --subtle-text: #78869b;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -35,6 +57,11 @@
         radial-gradient(700px 360px at 100% 0%, rgba(99,102,241,.12), transparent 45%);
       pointer-events: none;
     }
+    html[data-theme="light"] body::before {
+      background:
+        radial-gradient(900px 400px at 10% -10%, rgba(91,141,239,.12), transparent 50%),
+        radial-gradient(700px 360px at 100% 0%, rgba(99,102,241,.08), transparent 45%);
+    }
 
     /* Lock */
     #lockScreen {
@@ -45,11 +72,11 @@
     }
     .lock-card {
       width: 100%; max-width: 420px;
-      background: linear-gradient(180deg, #1a2438, #121a2b);
+      background: var(--card-gradient);
       border: 1px solid var(--line);
       border-radius: 20px;
       padding: 40px 36px 32px;
-      box-shadow: 0 24px 80px rgba(0,0,0,.45);
+      box-shadow: var(--shadow);
     }
     .brand-mark {
       width: 48px; height: 48px; border-radius: 12px;
@@ -68,7 +95,7 @@
       display: flex; align-items: center; justify-content: space-between;
       padding: 18px 28px;
       border-bottom: 1px solid var(--line);
-      background: rgba(11,18,32,.75);
+      background: var(--topbar-bg);
       backdrop-filter: blur(12px);
       position: sticky; top: 0; z-index: 5;
     }
@@ -80,6 +107,22 @@
       padding: 8px 14px; border-radius: 8px; cursor: pointer; font: inherit; font-size: 13px;
     }
     .ghost:hover { color: var(--text); border-color: #3a4a66; }
+    .theme-toggle {
+      display: inline-flex; align-items: center; gap: 8px;
+      border: 1px solid var(--line); border-radius: 999px;
+      padding: 7px 12px 7px 8px; background: var(--card); color: var(--text);
+      cursor: pointer; font: inherit; font-size: 12px; font-weight: 600;
+      box-shadow: 0 4px 14px rgba(15,23,42,.08);
+      transition: border-color .2s, transform .2s, background .2s;
+    }
+    .theme-toggle:hover { border-color: var(--accent); transform: translateY(-1px); }
+    .theme-icon {
+      width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+      background: var(--bg2); border: 1px solid var(--line); color: var(--accent); font-size: 14px;
+    }
+    .theme-toggle .sun { display: none; }
+    html[data-theme="light"] .theme-toggle .moon { display: none; }
+    html[data-theme="light"] .theme-toggle .sun { display: inline; }
 
     .wrap {
       max-width: 1120px; margin: 0 auto; padding: 28px 20px 48px;
@@ -115,7 +158,7 @@
     .note {
       background: rgba(91,141,239,.08);
       border: 1px solid rgba(91,141,239,.22);
-      color: #b8c9ea;
+      color: var(--note-text);
       border-radius: 10px; padding: 11px 14px; font-size: 12.5px; line-height: 1.5;
       margin-bottom: 4px;
     }
@@ -149,7 +192,7 @@
     .stat-num.red { color: var(--bad); }
     .stat-num.indigo { color: var(--accent); }
     .stat-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
-    .bar-wrap { background: #1e293b; border-radius: 99px; height: 8px; overflow: hidden; margin-bottom: 6px; }
+    .bar-wrap { background: var(--track); border-radius: 99px; height: 8px; overflow: hidden; margin-bottom: 6px; }
     .bar-fill { height: 100%; width: 0; background: linear-gradient(90deg, #5b8def, #818cf8); border-radius: 99px; transition: width .4s; }
     .bar-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 14px; }
     #logBox { max-height: 280px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
@@ -161,8 +204,8 @@
     .log-tag { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
     .log-tag.sent { background: rgba(52,211,153,.15); color: var(--ok); }
     .log-tag.failed { background: rgba(248,113,113,.15); color: var(--bad); }
-    .log-time { font-size: 11px; color: #64748b; }
-    .log-empty { text-align: center; color: #64748b; padding: 22px; font-size: 13px; }
+    .log-time { font-size: 11px; color: var(--subtle-text); }
+    .log-empty { text-align: center; color: var(--subtle-text); padding: 22px; font-size: 13px; }
     #historyCard { margin-top: 20px; }
     .history-row { display: grid; grid-template-columns: 1.4fr repeat(4, .7fr) auto; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); font-size: 12px; }
     .history-row.clickable { cursor: pointer; }
@@ -188,9 +231,9 @@
     }
     .maintenance-card {
       width: 100%; max-width: 520px; text-align: center;
-      background: linear-gradient(180deg, #1a2438, #121a2b);
+      background: var(--card-gradient);
       border: 1px solid var(--line); border-radius: 20px;
-      padding: 42px 30px 34px; box-shadow: 0 24px 80px rgba(0,0,0,.45);
+      padding: 42px 30px 34px; box-shadow: var(--shadow);
     }
     .maintenance-card .brand-mark { margin: 0 auto 20px; }
     .maintenance-card h1 { font-size: 25px; margin-bottom: 10px; }
@@ -235,7 +278,13 @@
         <span>Bulk mail console</span>
       </div>
     </div>
-    <button class="ghost" onclick="lock()">Lock</button>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button class="theme-toggle" id="themeToggle" type="button" onclick="toggleTheme()" aria-label="Switch to light mode" aria-pressed="false">
+        <span class="theme-icon"><span class="moon">&#9790;</span><span class="sun">&#9788;</span></span>
+        <span id="themeLabel">Light mode</span>
+      </button>
+      <button class="ghost" onclick="lock()">Lock</button>
+    </div>
   </header>
 
   <div class="wrap">
@@ -329,7 +378,31 @@ let token = sessionStorage.getItem('gate') || '';
 let keepAlive = null;
 const MAINTENANCE_END = Date.parse('2026-09-14T18:49:11+05:30');
 
+initTheme();
 initMaintenance();
+
+function initTheme() {
+  const savedTheme = localStorage.getItem('theme') || 'dark';
+  applyTheme(savedTheme);
+}
+
+function applyTheme(theme) {
+  const isLight = theme === 'light';
+  document.documentElement.dataset.theme = isLight ? 'light' : 'dark';
+  const toggle = document.getElementById('themeToggle');
+  const label = document.getElementById('themeLabel');
+  if (toggle) {
+    toggle.setAttribute('aria-pressed', String(isLight));
+    toggle.setAttribute('aria-label', isLight ? 'Switch to dark mode' : 'Switch to light mode');
+  }
+  if (label) label.textContent = isLight ? 'Dark mode' : 'Light mode';
+}
+
+function toggleTheme() {
+  const nextTheme = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+  localStorage.setItem('theme', nextTheme);
+  applyTheme(nextTheme);
+}
 
 function initMaintenance() {
   updateMaintenanceTimer();
