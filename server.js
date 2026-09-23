@@ -13,6 +13,14 @@ const PORT = process.env.PORT || 3000;
 const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
 const APP_PASSWORD = process.env.APP_PASSWORD || '7817808959';
 const DAILY_SEND_LIMIT = 1500;
+
+// Brevo quota configuration (can be set via env or updated manually)
+const BREVO_QUOTA_CONFIG = {
+  total: parseInt(process.env.BREVO_QUOTA_TOTAL || '10000', 10),
+  resetDate: process.env.BREVO_QUOTA_RESET_DATE || '2026-12-05',
+  used: parseInt(process.env.BREVO_QUOTA_USED || '8399', 10) // Total used so far (across all time)
+};
+
 const sessions = new Set();
 let mongoDb = null;
 
@@ -84,41 +92,14 @@ app.get('/api/quota', requireAuth, async (req, res) => {
 });
 
 app.get('/api/brevo-quota', requireAuth, async (req, res) => {
-  if (!process.env.BREVO_API_KEY) {
-    return res.status(400).json({ error: 'Brevo API key not configured' });
-  }
-  try {
-    const response = await fetch('https://api.brevo.com/v3/account', {
-      method: 'GET',
-      headers: {
-        'api-key': process.env.BREVO_API_KEY,
-        'accept': 'application/json'
-      }
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      return res.status(response.status).json({ error: data.message || 'Brevo API error' });
-    }
-    console.log('Brevo API response:', JSON.stringify(data, null, 2));
-    // Extract relevant info - check what fields are available
-    const brevoInfo = {
-      email: data.email || data.senderEmail || 'N/A',
-      firstName: data.firstName || 'Account',
-      lastName: data.lastName || '',
-      plan: data.plan || 'Free',
-      credits: data.credits || data.emailCredits || 0,
-      contacts: data.contacts || data.totalContacts || 0,
-      relay: data.relay || false,
-      // Include raw data for debugging
-      _raw: {
-        keys: Object.keys(data).slice(0, 10)
-      }
-    };
-    res.json(brevoInfo);
-  } catch (err) {
-    console.error('Brevo API error:', err);
-    res.status(500).json({ error: err.message });
-  }
+  const remaining = Math.max(0, BREVO_QUOTA_CONFIG.total - BREVO_QUOTA_CONFIG.used);
+  res.json({
+    total: BREVO_QUOTA_CONFIG.total,
+    used: BREVO_QUOTA_CONFIG.used,
+    remaining: remaining,
+    resetDate: BREVO_QUOTA_CONFIG.resetDate,
+    percentage: Math.round((BREVO_QUOTA_CONFIG.used / BREVO_QUOTA_CONFIG.total) * 100)
+  });
 });
 
 app.post('/api/logout', (req, res) => {
@@ -487,6 +468,7 @@ app.post('/api/start', requireAuth, async (req, res) => {
           { $set: { status: 'sent', sentAt: new Date() } }
         );
         state.sent++;
+        BREVO_QUOTA_CONFIG.used++;
         state.log.unshift({ email: to, status: 'sent',   time: new Date().toLocaleTimeString() });
       } catch(e) {
         console.error('FAIL', to, e.message);
@@ -498,7 +480,13 @@ app.post('/api/start', requireAuth, async (req, res) => {
         state.log.unshift({ email: to, status: 'failed', time: new Date().toLocaleTimeString(), error: e.message });
       }
 
-      push('update', { sent: state.sent, failed: state.failed, total: state.total, last: state.log[0] });
+      push('update', { 
+        sent: state.sent, 
+        failed: state.failed, 
+        total: state.total, 
+        last: state.log[0],
+        brevoRemaining: Math.max(0, BREVO_QUOTA_CONFIG.total - BREVO_QUOTA_CONFIG.used)
+      });
 
       if (i < emails.length - 1 && !state.stop) await sleep(delaySec * 1000);
     }
@@ -526,7 +514,13 @@ app.get('/api/progress', requireAuth, (req, res) => {
   res.flushHeaders();
   clients.push(res);
   if (state.total) {
-    push('update', { sent: state.sent, failed: state.failed, total: state.total, last: state.log[0] || null });
+    push('update', { 
+      sent: state.sent, 
+      failed: state.failed, 
+      total: state.total, 
+      last: state.log[0] || null,
+      brevoRemaining: Math.max(0, BREVO_QUOTA_CONFIG.total - BREVO_QUOTA_CONFIG.used)
+    });
   }
   req.on('close', () => { clients = clients.filter(c => c !== res); });
 });

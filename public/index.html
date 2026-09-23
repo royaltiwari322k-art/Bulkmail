@@ -550,6 +550,15 @@ function openSSE() {
     const d = JSON.parse(e.data);
     updateStats(d.sent, d.failed, d.total);
     if (d.last) addLog(d.last);
+    if (d.brevoRemaining !== undefined) {
+      // Fetch full quota info to get total and resetDate for display
+      fetch('/api/brevo-quota', { credentials: 'include', headers: authHeaders() })
+        .then(r => r.json())
+        .then(quota => {
+          updateBrevoQuotaDisplay(d.brevoRemaining, quota.total, quota.resetDate);
+        })
+        .catch(() => {});
+    }
   });
   sse.addEventListener('done', e => {
     const d = JSON.parse(e.data);
@@ -558,6 +567,7 @@ function openSSE() {
     sse.close();
     loadHistory();
     loadQuota();
+    loadBrevoQuota();
     alert('Campaign finished\nSent: ' + d.sent + '  |  Failed: ' + d.failed);
   });
   return new Promise((resolve, reject) => {
@@ -582,15 +592,19 @@ async function loadBrevoQuota() {
     const r = await fetch('/api/brevo-quota', { credentials: 'include', headers: authHeaders() });
     const d = await r.json();
     if (!r.ok) {
-      document.getElementById('brevoInfo').textContent = 'API Key not set';
+      document.getElementById('brevoInfo').textContent = 'Quota unavailable';
       return;
     }
-    const displayText = `${d.firstName || 'Account'} • ${d.contacts.toLocaleString()} contacts • Credits: ${d.credits || 'N/A'}`;
-    document.getElementById('brevoInfo').textContent = displayText;
-    document.getElementById('brevoInfo').title = `Email: ${d.email}\nPlan: ${d.plan}`;
+    updateBrevoQuotaDisplay(d.remaining, d.total, d.resetDate);
   } catch (e) {
-    document.getElementById('brevoInfo').textContent = 'Error loading Brevo info';
+    document.getElementById('brevoInfo').textContent = 'Error loading quota';
   }
+}
+
+function updateBrevoQuotaDisplay(remaining, total, resetDate) {
+  if (!remaining || total === undefined) return;
+  const displayText = `${remaining.toLocaleString()} left out of ${total.toLocaleString()} until ${resetDate}`;
+  document.getElementById('brevoInfo').textContent = displayText;
 }
 
 async function loadHistory() {
