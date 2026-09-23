@@ -99,18 +99,24 @@ app.get('/api/brevo-quota', requireAuth, async (req, res) => {
     if (!response.ok) {
       return res.status(response.status).json({ error: data.message || 'Brevo API error' });
     }
-    // Extract relevant info
+    console.log('Brevo API response:', JSON.stringify(data, null, 2));
+    // Extract relevant info - check what fields are available
     const brevoInfo = {
-      email: data.email || 'N/A',
-      firstName: data.firstName || '',
+      email: data.email || data.senderEmail || 'N/A',
+      firstName: data.firstName || 'Account',
       lastName: data.lastName || '',
       plan: data.plan || 'Free',
-      credits: data.credits || 0,
-      contacts: data.contacts || 0,
-      relay: data.relay || false
+      credits: data.credits || data.emailCredits || 0,
+      contacts: data.contacts || data.totalContacts || 0,
+      relay: data.relay || false,
+      // Include raw data for debugging
+      _raw: {
+        keys: Object.keys(data).slice(0, 10)
+      }
     };
     res.json(brevoInfo);
   } catch (err) {
+    console.error('Brevo API error:', err);
     res.status(500).json({ error: err.message });
   }
 });
