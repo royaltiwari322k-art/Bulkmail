@@ -278,7 +278,11 @@
         <span>Bulk mail console</span>
       </div>
     </div>
-    <div style="display:flex;align-items:center;gap:10px">
+    <div style="display:flex;align-items:center;gap:16px;font-size:12px;color:var(--muted)">
+      <div id="brevoStatus" style="display:flex;gap:8px;align-items:center">
+        <span style="color:var(--accent);font-weight:600">Brevo:</span>
+        <span id="brevoInfo" style="min-width:180px">Loading...</span>
+      </div>
       <button class="theme-toggle" id="themeToggle" type="button" onclick="toggleTheme()" aria-label="Switch to light mode" aria-pressed="false">
         <span class="theme-icon"><span class="moon">&#9790;</span><span class="sun">&#9788;</span></span>
         <span id="themeLabel">Light mode</span>
@@ -469,6 +473,7 @@ function showApp() {
   document.getElementById('app').style.display = 'block';
   loadHistory();
   loadQuota();
+  loadBrevoQuota();
 }
 
 function authHeaders(json) {
@@ -570,6 +575,22 @@ async function loadQuota() {
     document.getElementById('quotaUsed').textContent = d.used.toLocaleString();
     document.getElementById('quotaRemaining').textContent = d.remaining.toLocaleString();
   } catch (_) {}
+}
+
+async function loadBrevoQuota() {
+  try {
+    const r = await fetch('/api/brevo-quota', { credentials: 'include', headers: authHeaders() });
+    const d = await r.json();
+    if (!r.ok) {
+      document.getElementById('brevoInfo').textContent = 'API Key not set';
+      return;
+    }
+    const displayText = `${d.firstName || 'Account'} • ${d.contacts.toLocaleString()} contacts • Credits: ${d.credits || 'N/A'}`;
+    document.getElementById('brevoInfo').textContent = displayText;
+    document.getElementById('brevoInfo').title = `Email: ${d.email}\nPlan: ${d.plan}`;
+  } catch (e) {
+    document.getElementById('brevoInfo').textContent = 'Error loading Brevo info';
+  }
 }
 
 async function loadHistory() {

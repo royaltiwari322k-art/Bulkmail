@@ -83,6 +83,38 @@ app.get('/api/quota', requireAuth, async (req, res) => {
   res.json({ limit: DAILY_SEND_LIMIT, used: usage.triggered, remaining: Math.max(0, DAILY_SEND_LIMIT - usage.triggered) });
 });
 
+app.get('/api/brevo-quota', requireAuth, async (req, res) => {
+  if (!process.env.BREVO_API_KEY) {
+    return res.status(400).json({ error: 'Brevo API key not configured' });
+  }
+  try {
+    const response = await fetch('https://api.brevo.com/v3/account', {
+      method: 'GET',
+      headers: {
+        'api-key': process.env.BREVO_API_KEY,
+        'accept': 'application/json'
+      }
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      return res.status(response.status).json({ error: data.message || 'Brevo API error' });
+    }
+    // Extract relevant info
+    const brevoInfo = {
+      email: data.email || 'N/A',
+      firstName: data.firstName || '',
+      lastName: data.lastName || '',
+      plan: data.plan || 'Free',
+      credits: data.credits || 0,
+      contacts: data.contacts || 0,
+      relay: data.relay || false
+    };
+    res.json(brevoInfo);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/logout', (req, res) => {
   sessions.delete(cookieToken(req));
   res.setHeader('Set-Cookie', 'gate=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
