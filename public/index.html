@@ -219,6 +219,10 @@
     .history-status { color: var(--muted); }
     .history-status.opened { color: var(--ok); }
     .history-status.unopened { color: #fbbf24; }
+    .open-summary { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
+    .open-summary-box { background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+    .open-summary-num { font-size: 22px; font-weight: 700; color: var(--ok); }
+    .open-summary-label { color: var(--muted); font-size: 11px; margin-top: 2px; }
     .history-delete { border: 1px solid rgba(248,113,113,.35); background: transparent; color: var(--bad); border-radius: 6px; padding: 5px 8px; cursor: pointer; font: inherit; font-size: 11px; }
     .history-delete:hover { background: rgba(248,113,113,.12); }
     #historyDetails { margin-top: 14px; max-height: 260px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; display: none; }
@@ -369,6 +373,10 @@
           <input id="historyDate" type="date" aria-label="Filter campaign history by date" onchange="loadHistory()" />
           <button class="btn btn-sm" type="button" onclick="clearHistoryDate()">All dates</button>
         </div>
+        <div class="open-summary" aria-label="Email open summary">
+          <div class="open-summary-box"><div class="open-summary-num" id="todayOpened">0</div><div class="open-summary-label">Seen today</div></div>
+          <div class="open-summary-box"><div class="open-summary-num" id="totalOpened">0</div><div class="open-summary-label">Seen overall</div></div>
+        </div>
         <div id="historyList"><div class="log-empty">Loading history…</div></div>
         <div id="historyDetails"></div>
       </div>
@@ -380,6 +388,8 @@
 let sse = null;
 let token = sessionStorage.getItem('gate') || '';
 let keepAlive = null;
+let detailsRefreshTimer = null;
+let selectedCampaignId = '';
 const MAINTENANCE_END = Date.parse('2026-09-14T18:49:11+05:30');
 
 initTheme();
@@ -472,6 +482,7 @@ function showApp() {
   document.getElementById('lockScreen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   loadHistory();
+  loadOpenStats();
   loadQuota();
   loadBrevoQuota();
 }
@@ -619,6 +630,7 @@ async function loadHistory() {
       list.innerHTML = '<div class="log-empty">MongoDB connected nahi hai</div>';
       return;
     }
+    updateOpenSummary(d.campaigns);
     if (!d.campaigns.length) {
       list.innerHTML = '<div class="log-empty">Abhi koi campaign history nahi hai</div>';
       return;
@@ -644,9 +656,30 @@ async function loadHistory() {
   }
 }
 
+async function loadOpenStats() {
+  try {
+    const r = await fetch('/api/open-stats', { credentials: 'include', headers: authHeaders() });
+    const d = await r.json();
+    if (r.ok && d.enabled) {
+      document.getElementById('todayOpened').textContent = d.today.toLocaleString();
+      document.getElementById('totalOpened').textContent = d.total.toLocaleString();
+    }
+  } catch (_) {}
+}
+
+function updateOpenSummary(campaigns) {
+  const today = campaigns.reduce((sum, campaign) => sum + (campaign.openedToday || 0), 0);
+  const total = campaigns.reduce((sum, campaign) => sum + (campaign.opened || 0), 0);
+  document.getElementById('todayOpened').textContent = today.toLocaleString();
+  document.getElementById('totalOpened').textContent = total.toLocaleString();
+}
+
 function clearHistoryDate() {
   document.getElementById('historyDate').value = '';
   document.getElementById('historyDetails').style.display = 'none';
+  clearInterval(detailsRefreshTimer);
+  detailsRefreshTimer = null;
+  selectedCampaignId = '';
   loadHistory();
 }
 
@@ -685,6 +718,11 @@ async function loadHistoryDetails(campaignId) {
       details.appendChild(row);
     });
     details.style.display = 'block';
+    selectedCampaignId = campaignId;
+    clearInterval(detailsRefreshTimer);
+    detailsRefreshTimer = setInterval(() => {
+      if (selectedCampaignId) loadHistoryDetails(selectedCampaignId);
+    }, 15000);
   } catch (error) {
     details.textContent = error.message;
     details.style.display = 'block';

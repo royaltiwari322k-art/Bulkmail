@@ -50,6 +50,7 @@ async function connectDatabase() {
     mongoDb = client.db();
     await mongoDb.collection('campaigns').createIndex({ createdAt: -1 });
     await mongoDb.collection('email_events').createIndex({ campaignId: 1, createdAt: -1 });
+    await mongoDb.collection('email_events').createIndex({ openedAt: 1 });
     await mongoDb.collection('email_events').createIndex({ trackingId: 1 }, { unique: true });
     console.log('MongoDB connected');
   } catch (error) {
@@ -65,6 +66,13 @@ function cookieToken(req) {
   const raw = req.headers.cookie || '';
   const part = raw.split(';').map(s => s.trim()).find(s => s.startsWith('gate='));
   return part ? part.slice(5) : '';
+}
+
+function publicBaseUrl(req) {
+  if (process.env.BASE_URL) return BASE_URL;
+  const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+  const protocol = forwardedProto || (req.secure ? 'https' : 'http');
+  return `${protocol}://${req.get('host')}`.replace(/\/$/, '');
 }
 
 function requireAuth(req, res, next) {
@@ -100,6 +108,17 @@ app.get('/api/brevo-quota', requireAuth, async (req, res) => {
     resetDate: BREVO_QUOTA_CONFIG.resetDate,
     percentage: Math.round((BREVO_QUOTA_CONFIG.used / BREVO_QUOTA_CONFIG.total) * 100)
   });
+});
+
+app.get('/api/open-stats', requireAuth, async (req, res) => {
+  if (!mongoDb) return res.json({ enabled: false, today: 0, total: 0 });
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const [today, total] = await Promise.all([
+    mongoDb.collection('email_events').countDocuments({ openedAt: { $gte: startOfToday } }),
+    mongoDb.collection('email_events').countDocuments({ openedAt: { $ne: null } })
+  ]);
+  res.json({ enabled: true, today, total, date: startOfToday.toISOString().slice(0, 10) });
 });
 
 app.post('/api/logout', (req, res) => {
@@ -307,10 +326,15 @@ app.get('/api/history', requireAuth, async (req, res) => {
     .sort({ createdAt: -1 });
   if (!date) cursor.limit(100);
   const campaigns = await cursor.toArray();
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
   await Promise.all(campaigns.map(async campaign => {
-    campaign.opened = await mongoDb.collection('email_events').countDocuments({
-      campaignId: campaign.campaignId, openedAt: { $ne: null }
-    });
+    const [opened, openedToday] = await Promise.all([
+      mongoDb.collection('email_events').countDocuments({ campaignId: campaign.campaignId, openedAt: { $ne: null } }),
+      mongoDb.collection('email_events').countDocuments({ campaignId: campaign.campaignId, openedAt: { $gte: startOfToday } })
+    ]);
+    campaign.opened = opened;
+    campaign.openedToday = openedToday;
   }));
   res.json({ enabled: true, campaigns });
 });
@@ -339,10 +363,20 @@ app.delete('/api/history/:campaignId', requireAuth, async (req, res) => {
 app.get('/track/open/:trackingId.gif', async (req, res) => {
   res.set({ 'Content-Type': 'image/gif', 'Cache-Control': 'no-store, no-cache, must-revalidate' });
   if (mongoDb) {
-    await mongoDb.collection('email_events').updateOne(
+    const result = await mongoDb.collection('email_events').updateOne(
       { trackingId: req.params.trackingId, openedAt: null },
       { $set: { openedAt: new Date(), opened: true } }
     );
+    if (result.modifiedCount) {
+      const event = await mongoDb.collection('email_events').findOne(
+        { trackingId: req.params.trackingId }, { projection: { campaignId: 1 } }
+      );
+      if (event?.campaignId) {
+        await mongoDb.collection('campaigns').updateOne(
+          { campaignId: event.campaignId }, { $inc: { opened: 1 } }
+        );
+      }
+    }
   }
   res.send(trackingPixel());
 });
@@ -403,6 +437,7 @@ app.post('/api/start', requireAuth, async (req, res) => {
       : `Your today limit is complete. Aaj maximum ${DAILY_SEND_LIMIT} emails already trigger ho chuki hain.` });
   }
   const campaignId = crypto.randomUUID();
+  const trackingBaseUrl = publicBaseUrl(req);
   const recipients = emails.map(email => ({
     campaignId,
     trackingId: crypto.randomUUID(),
@@ -439,12 +474,12 @@ app.post('/api/start', requireAuth, async (req, res) => {
 
       const to = emails[i].trim();
       const recipient = recipients[i];
-      const unsubUrl = `${BASE_URL}/unsubscribe?e=${encodeURIComponent(to)}`;
+      const unsubUrl = `${trackingBaseUrl}/unsubscribe?e=${encodeURIComponent(to)}`;
       const html = wrapEmail({
         displayName,
         inner: bodyToHtml(body),
         unsubUrl,
-        trackingUrl: `${BASE_URL}/track/open/${recipient.trackingId}.gif`
+        trackingUrl: `${trackingBaseUrl}/track/open/${recipient.trackingId}.gif`
       });
       const text = String(body).trim() + `\n\n— ${displayName}\nUnsubscribe: ${unsubUrl}`;
 
