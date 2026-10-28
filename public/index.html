@@ -529,7 +529,7 @@ async function startCampaign() {
   if (!from) return alert('From email required');
   if (!subject || !body) return alert('Subject and message required');
   if (!emails.length) return alert('No valid emails found');
-  if (emails.length > 1500) return alert('Your today limit is complete. Ek campaign mein maximum 1500 emails bhej sakte ho.');
+  if (emails.length > 2500) return alert('Your today limit is complete. Ek campaign mein maximum 2500 emails bhej sakte ho.');
 
   setRunning(true);
   showProgress(emails.length);
